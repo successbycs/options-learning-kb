@@ -1,4 +1,4 @@
-from hashlib import sha256
+import re
 
 import pytest
 
@@ -49,3 +49,24 @@ def test_chunks_are_timestamped_and_reproducible():
     assert chunks[0].timestamp_start_label == "00:00:10"
     assert chunks[1].timestamp_start_label == "00:02:30"
     assert len(chunks[0].chunk_sha256) == 64
+
+
+def test_yaml_front_matter_is_safe_and_timestamps_must_be_ordered():
+    markdown = reviewed_markdown().replace(
+        "lesson_title: Assignment obligations",
+        'lesson_title: "Assignment: obligations"\ncourse_title: [private, reviewed]',
+    )
+    digest = canonical_transcript_sha256(markdown)
+    markdown = re.sub(r"transcript_sha256: [0-9a-f]{64}", f"transcript_sha256: {digest}", markdown)
+    transcript = parse_reviewed_transcript(markdown)
+    assert transcript.lesson_title == "Assignment: obligations"
+
+    unordered = reviewed_markdown().replace("[00:01:15]", "[00:00:05]")
+    unordered_digest = canonical_transcript_sha256(unordered)
+    unordered = re.sub(
+        r"transcript_sha256: [0-9a-f]{64}",
+        f"transcript_sha256: {unordered_digest}",
+        unordered,
+    )
+    with pytest.raises(TranscriptContractError, match="non-decreasing"):
+        parse_reviewed_transcript(unordered)

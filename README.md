@@ -44,6 +44,8 @@ The migration creates source, document, timestamped chunk, ingest run, retrieval
 
 Follow [the T480 operator runbook](docs/OPERATOR_RUNBOOK.md). The important operational constraint is that `db/migrations/001_options_learning_kb.sql` must be reviewed and applied via the shared T480 PostgreSQL adapter—not with a new database or a local database port.
 
+`GET /healthz` is a process liveness check. `GET /readyz` verifies PostgreSQL and the configured local Ollama model without sending or returning transcript content. Uploading always creates a `DRAFT` source; retrieval requires both an `APPROVED` transcript in its front matter and a separate operator approval.
+
 For local code checks:
 
 ```bash

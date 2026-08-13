@@ -10,17 +10,18 @@ from options_learning_kb.embeddings import OllamaEmbeddingProvider
 from options_learning_kb.service import KnowledgeBaseService
 from options_learning_kb.transcript import TranscriptContractError, parse_reviewed_transcript
 
-
 st.set_page_config(page_title="Options Learning KB", page_icon="📚", layout="wide")
 
 
 @st.cache_resource
 def kb() -> KnowledgeBaseService:
     settings = Settings.from_env()
+    settings.validate_runtime()
     return KnowledgeBaseService(
         Database(settings.database_url),
         OllamaEmbeddingProvider(settings.ollama_base_url, settings.embedding_model, settings.embedding_dimensions),
         settings.embedding_model,
+        default_search_limit=settings.search_limit,
     )
 
 
@@ -35,7 +36,9 @@ def seconds_from_timestamp(value: str) -> int | None:
 
 
 st.title("Options Learning KB")
-st.caption("Private learning/research retrieval. Results are cited passages, not trading advice, trade authorization, or proof of edge.")
+st.caption(
+    "Private learning/research retrieval. Results are cited passages, not trading advice, trade authorization, or proof of edge."
+)
 
 try:
     service = kb()
@@ -47,7 +50,9 @@ registry, ingest, search_tab, test_lab = st.tabs(["Source Registry", "Ingest Stu
 
 with registry:
     st.subheader("Register a reviewed transcript")
-    st.caption("Only reviewed Markdown from mp4-to-transcript is accepted. MP4/video files are intentionally unsupported.")
+    st.caption(
+        "Only reviewed Markdown from mp4-to-transcript is accepted. MP4/video files are intentionally unsupported."
+    )
     with st.form("source_upload"):
         uploaded = st.file_uploader("Reviewed Markdown transcript", type=["md", "markdown", "txt"])
         owner = st.text_input("Owner")
@@ -61,8 +66,10 @@ with registry:
             try:
                 markdown = uploaded.getvalue().decode("utf-8")
                 transcript = parse_reviewed_transcript(markdown)
-                source = service.register_source(markdown, owner.strip(), permission_basis.strip(), citation_policy.strip())
-                st.success(f"Registered {transcript.lesson_title} as {source['review_status']}.")
+                source = service.register_source(
+                    markdown, owner.strip(), permission_basis.strip(), citation_policy.strip()
+                )
+                st.success(f"Registered {transcript.lesson_title} as DRAFT. Approve it separately after review.")
             except UnicodeDecodeError:
                 st.error("The transcript must be UTF-8 Markdown.")
             except (TranscriptContractError, ValueError) as error:
@@ -78,11 +85,17 @@ with registry:
         selected = st.selectbox("Source to approve or disable", list(source_by_label), key="registry_action_source")
         action_columns = st.columns(2)
         if action_columns[0].button("Approve source", type="primary"):
-            service.update_source_status(str(source_by_label[selected]["id"]), "APPROVED")
-            st.rerun()
+            try:
+                service.update_source_status(str(source_by_label[selected]["id"]), "APPROVED")
+                st.rerun()
+            except ValueError as error:
+                st.error(str(error))
         if action_columns[1].button("Disable source"):
-            service.update_source_status(str(source_by_label[selected]["id"]), "DISABLED")
-            st.rerun()
+            try:
+                service.update_source_status(str(source_by_label[selected]["id"]), "DISABLED")
+                st.rerun()
+            except ValueError as error:
+                st.error(str(error))
     else:
         st.info("No source registered yet.")
 
@@ -109,7 +122,9 @@ with ingest:
 
 with search_tab:
     st.subheader("Cited semantic retrieval")
-    st.caption("The service returns retrieved source text only. It does not produce a recommendation or an uncited answer.")
+    st.caption(
+        "The service returns retrieved source text only. It does not produce a recommendation or an uncited answer."
+    )
     sources = service.list_sources()
     approved = [source for source in sources if source["review_status"] == "APPROVED"]
     scope_labels = {f"{row['lesson_title']} — {row['id']}": str(row["id"]) for row in approved}
@@ -129,7 +144,10 @@ with search_tab:
 with test_lab:
     st.subheader("Retrieval QA")
     sources = service.list_sources()
-    source_options = {"No expected source": None, **{f"{row['lesson_title']} — {row['id']}": str(row["id"]) for row in sources}}
+    source_options = {
+        "No expected source": None,
+        **{f"{row['lesson_title']} — {row['id']}": str(row["id"]) for row in sources},
+    }
     with st.form("qa_question"):
         qa_question = st.text_input("Question")
         expected_label = st.selectbox("Expected source", list(source_options))
@@ -140,7 +158,9 @@ with test_lab:
         if not qa_question.strip() or (expected_timestamp and seconds is None):
             st.error("Provide a question and use HH:MM:SS for an expected timestamp.")
         else:
-            service.create_qa_question(qa_question.strip(), source_options[expected_label], seconds, expected_timestamp or None)
+            service.create_qa_question(
+                qa_question.strip(), source_options[expected_label], seconds, expected_timestamp or None
+            )
             st.rerun()
     qa_rows = service.list_qa()
     if qa_rows:
@@ -153,7 +173,9 @@ with test_lab:
     st.subheader("Unsupported-question gaps")
     with st.form("create_gap"):
         gap_question = st.text_input("Unsupported question")
-        gap_reason = st.text_area("Why it is unsupported", value="No approved transcript passage currently supports this question.")
+        gap_reason = st.text_area(
+            "Why it is unsupported", value="No approved transcript passage currently supports this question."
+        )
         create_gap = st.form_submit_button("Create visible gap")
     if create_gap:
         if gap_question.strip() and gap_reason.strip():

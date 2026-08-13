@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Print the canonical SHA-256 for a reviewed transcript without storing it."""
+
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from options_learning_kb.transcript import canonical_transcript_sha256  # noqa: E402

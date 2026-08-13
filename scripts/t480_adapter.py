@@ -6,6 +6,7 @@ fixed operation IDs published in t480/command-catalog.json; callers cannot
 provide a shell command, SSH arguments, or WSL script. This first port is
 read-only so it can safely review the shared T480 runtime used by the KB.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,12 +14,12 @@ import base64
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 TOOL_ID = "options_learning_kb_t480"
@@ -58,23 +59,43 @@ OPERATIONS: dict[str, dict[str, Any]] = {
     },
     "shared_lab_status": {
         "purpose": "Inspect shared cs-ai-lab Compose configuration validity and running service health.",
-        "wsl_script": "set -euo pipefail\ncd " + LAB_ROOT + "\necho ---revision---\ngit rev-parse --short HEAD 2>/dev/null || true\necho ---compose-validation---\ndocker compose config --quiet\necho valid\necho ---services---\ndocker compose ps -a\necho ---network---\ndocker network inspect cs-ai-lab_internal --format '{{.Name}} driver={{.Driver}} containers={{len .Containers}}'\n",
+        "wsl_script": "set -euo pipefail\ncd "
+        + LAB_ROOT
+        + "\necho ---revision---\ngit rev-parse --short HEAD 2>/dev/null || true\necho ---compose-validation---\ndocker compose config --quiet\necho valid\necho ---services---\ndocker compose ps -a\necho ---network---\ndocker network inspect cs-ai-lab_internal --format '{{.Name}} driver={{.Driver}} containers={{len .Containers}}'\n",
     },
     "pgvector_status": {
         "purpose": "Inspect the existing PostgreSQL/pgvector health and extension without exposing its port or credentials.",
-        "wsl_script": "set -euo pipefail\ncd " + LAB_ROOT + "\nset -a\nsource .env\nset +a\ndocker compose ps postgres\ndocker compose exec -T postgres pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" </dev/null\ndocker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -Atc \"SELECT current_database(), extname FROM pg_extension WHERE extname = 'vector';\" </dev/null\n",
+        "wsl_script": "set -euo pipefail\ncd "
+        + LAB_ROOT
+        + '\nset -a\nsource .env\nset +a\ndocker compose ps postgres\ndocker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" </dev/null\ndocker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT current_database(), extname FROM pg_extension WHERE extname = \'vector\';" </dev/null\n',
     },
     "ollama_bge_status": {
         "purpose": "Inspect private Ollama health and confirm the local bge-m3 embedding model is installed.",
-        "wsl_script": "set -euo pipefail\ncd " + LAB_ROOT + "\necho ---ollama-container---\ndocker compose --profile ollama ps ollama\nif docker compose --profile ollama ps --status running --services | grep -qx ollama; then\n  echo ---models---\n  docker compose exec -T ollama ollama list\n  docker compose exec -T ollama ollama list | grep -Eq '^bge-m3(:|[[:space:]])' && echo bge-m3-ready\nelse\n  echo ollama-not-running\n  exit 4\nfi\n",
+        "wsl_script": "set -euo pipefail\ncd "
+        + LAB_ROOT
+        + "\necho ---ollama-container---\ndocker compose --profile ollama ps ollama\nif docker compose --profile ollama ps --status running --services | grep -qx ollama; then\n  echo ---models---\n  docker compose exec -T ollama ollama list\n  docker compose exec -T ollama ollama list | grep -Eq '^bge-m3(:|[[:space:]])' && echo bge-m3-ready\nelse\n  echo ollama-not-running\n  exit 4\nfi\n",
     },
     "options_kb_preflight": {
         "purpose": "Inspect whether Options Learning KB can safely consume the already-running private services.",
-        "wsl_script": "set -euo pipefail\necho ---application-checkout---\nif [ -d " + KB_ROOT + " ]; then\n  git -C " + KB_ROOT + " rev-parse --short HEAD 2>/dev/null || true\n  test -f " + KB_ROOT + "/compose.yaml && echo compose-present\n  test -f " + KB_ROOT + "/db/migrations/001_options_learning_kb.sql && echo migration-present\nelse\n  echo checkout-absent\nfi\necho ---shared-network---\ndocker network inspect cs-ai-lab_internal --format '{{.Name}} driver={{.Driver}} containers={{len .Containers}}'\necho ---postgres---\ncd " + LAB_ROOT + "\nset -a\nsource .env\nset +a\ndocker compose exec -T postgres pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" </dev/null\necho ---ollama-bge---\ndocker compose --profile ollama ps --status running --services | grep -qx ollama\ndocker compose exec -T ollama ollama list | grep -Eq '^bge-m3(:|[[:space:]])'\necho bge-m3-ready\n",
+        "wsl_script": "set -euo pipefail\necho ---application-checkout---\nif [ -d "
+        + KB_ROOT
+        + " ]; then\n  git -C "
+        + KB_ROOT
+        + " rev-parse --short HEAD 2>/dev/null || true\n  test -f "
+        + KB_ROOT
+        + "/compose.yaml && echo compose-present\n  test -f "
+        + KB_ROOT
+        + "/db/migrations/001_options_learning_kb.sql && echo migration-present\nelse\n  echo checkout-absent\nfi\necho ---shared-network---\ndocker network inspect cs-ai-lab_internal --format '{{.Name}} driver={{.Driver}} containers={{len .Containers}}'\necho ---postgres---\ncd "
+        + LAB_ROOT
+        + '\nset -a\nsource .env\nset +a\ndocker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" </dev/null\necho ---ollama-bge---\ndocker compose --profile ollama ps --status running --services | grep -qx ollama\ndocker compose exec -T ollama ollama list | grep -Eq \'^bge-m3(:|[[:space:]])\'\necho bge-m3-ready\n',
     },
     "options_kb_runtime_status": {
         "purpose": "Inspect deployed Options Learning KB containers only; no logs, data, secrets, or mutations.",
-        "wsl_script": "set -euo pipefail\nif [ ! -d " + KB_ROOT + " ]; then echo checkout-absent; exit 4; fi\ncd " + KB_ROOT + "\ndocker compose ps -a\n",
+        "wsl_script": "set -euo pipefail\nif [ ! -d "
+        + KB_ROOT
+        + " ]; then echo checkout-absent; exit 4; fi\ncd "
+        + KB_ROOT
+        + "\ndocker compose ps -a\n",
     },
 }
 
@@ -103,11 +124,17 @@ def configured_target() -> str:
 def ssh_command(target: str, powershell_command: str) -> list[str]:
     encoded_command = base64.b64encode(powershell_command.encode("utf-16-le")).decode("ascii")
     encoded_target = base64.b64encode(target.encode()).decode("ascii")
-    return ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", (
-        "$target=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded_target + "')); "
-        "$remoteCommand='powershell.exe -NoProfile -NonInteractive -EncodedCommand " + encoded_command + "'; "
-        "$sshArguments=@('-o','BatchMode=yes','-o','StrictHostKeyChecking=yes',$target,$remoteCommand); & ssh.exe @sshArguments"
-    )]
+    return [
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        (
+            "$target=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded_target + "')); "
+            "$remoteCommand='powershell.exe -NoProfile -NonInteractive -EncodedCommand " + encoded_command + "'; "
+            "$sshArguments=@('-o','BatchMode=yes','-o','StrictHostKeyChecking=yes',$target,$remoteCommand); & ssh.exe @sshArguments"
+        ),
+    ]
 
 
 def wsl_bash_script_command(script: str) -> str:
@@ -116,15 +143,17 @@ def wsl_bash_script_command(script: str) -> str:
 
 
 def run_command(command: list[str]) -> dict[str, Any]:
-    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    started_at = datetime.now(UTC).isoformat(timespec="seconds")
     started = time.monotonic()
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     return {
         "started_at": started_at,
-        "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "finished_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "duration_ms": round((time.monotonic() - started) * 1000),
         "exit_code": completed.returncode,
-        "stdout": completed.stdout.strip(), "stderr": completed.stderr.strip(), "ok": completed.returncode == 0,
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+        "ok": completed.returncode == 0,
     }
 
 
@@ -135,12 +164,21 @@ def _digest(value: str) -> str:
 def append_execution_log(command_name: str, operation_id: str | None, payload: dict[str, Any]) -> None:
     """Persist metadata/hashes locally without recording T480 output or credentials."""
     result = payload.get("result") or payload.get("remote_check") or {}
-    entry = {"logged_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "tool_id": TOOL_ID,
-             "command": command_name, "operation": operation_id, "started_at": result.get("started_at"),
-             "finished_at": result.get("finished_at"), "duration_ms": result.get("duration_ms"),
-             "exit_code": result.get("exit_code"), "ok": payload.get("ok", result.get("ok")),
-             "stdout_bytes": len(result.get("stdout", "")), "stderr_bytes": len(result.get("stderr", "")),
-             "stdout_sha256": _digest(result.get("stdout", "")), "stderr_sha256": _digest(result.get("stderr", ""))}
+    entry = {
+        "logged_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "tool_id": TOOL_ID,
+        "command": command_name,
+        "operation": operation_id,
+        "started_at": result.get("started_at"),
+        "finished_at": result.get("finished_at"),
+        "duration_ms": result.get("duration_ms"),
+        "exit_code": result.get("exit_code"),
+        "ok": payload.get("ok", result.get("ok")),
+        "stdout_bytes": len(result.get("stdout", "")),
+        "stderr_bytes": len(result.get("stderr", "")),
+        "stdout_sha256": _digest(result.get("stdout", "")),
+        "stderr_sha256": _digest(result.get("stderr", "")),
+    }
     with EXECUTION_LOG_PATH.open("a", encoding="utf-8") as file:
         file.write(json.dumps(entry, separators=(",", ":")) + "\n")
 
@@ -149,15 +187,24 @@ def preflight() -> dict[str, Any]:
     try:
         target = configured_target()
     except RuntimeError as error:
-        return {"tool_id": TOOL_ID, "local_checks": {"ssh_available": shutil.which("ssh") is not None,
-                "ssh_target_configured": False}, "ok": False, "error": str(error)}
-    checks = {"powershell_available": shutil.which("powershell.exe") is not None,
-              "windows_ssh_available": shutil.which("ssh.exe") is not None, "ssh_target_configured": bool(target)}
+        return {
+            "tool_id": TOOL_ID,
+            "local_checks": {"ssh_available": shutil.which("ssh") is not None, "ssh_target_configured": False},
+            "ok": False,
+            "error": str(error),
+        }
+    checks = {
+        "powershell_available": shutil.which("powershell.exe") is not None,
+        "windows_ssh_available": shutil.which("ssh.exe") is not None,
+        "ssh_target_configured": bool(target),
+    }
     payload: dict[str, Any] = {"tool_id": TOOL_ID, "local_checks": checks}
     if not all(checks.values()):
         payload["ok"] = False
         return payload
-    payload["remote_check"] = run_command(ssh_command(target, "$ErrorActionPreference='Stop'; wsl.exe -d Ubuntu -- bash -lc 'whoami && uname -m'"))
+    payload["remote_check"] = run_command(
+        ssh_command(target, "$ErrorActionPreference='Stop'; wsl.exe -d Ubuntu -- bash -lc 'whoami && uname -m'")
+    )
     payload["ok"] = payload["remote_check"]["ok"]
     return payload
 
@@ -168,16 +215,30 @@ def execute(operation_id: str) -> dict[str, Any]:
         raise RuntimeError(f"Unknown operation: {operation_id}")
     command = details.get("command") or wsl_bash_script_command(details["wsl_script"])
     result = run_command(ssh_command(configured_target(), command))
-    return {"tool_id": TOOL_ID, "operation": operation_id, "approval_required": False, "result": result, "ok": result["ok"]}
+    return {
+        "tool_id": TOOL_ID,
+        "operation": operation_id,
+        "approval_required": False,
+        "result": result,
+        "ok": result["ok"],
+    }
 
 
 def requirements() -> dict[str, Any]:
-    return {"tool_id": TOOL_ID, "description": "Run fixed, read-only T480 Windows/WSL/Docker health operations over SSH.",
-            "requirements": [f"Set {SSH_TARGET_ENV} or use ignored {LOCAL_CONFIG_PATH.name}.",
-                             "Configure SSH key authentication and verify the T480 host key.",
-                             "The T480 Windows SSH account must access Ubuntu through wsl.exe."],
-            "commands": ["describe-requirements", "preflight", "execute", "verify"],
-            "operations": [{"id": name, "purpose": details["purpose"], "approval_required": False} for name, details in OPERATIONS.items()]}
+    return {
+        "tool_id": TOOL_ID,
+        "description": "Run fixed, read-only T480 Windows/WSL/Docker health operations over SSH.",
+        "requirements": [
+            f"Set {SSH_TARGET_ENV} or use ignored {LOCAL_CONFIG_PATH.name}.",
+            "Configure SSH key authentication and verify the T480 host key.",
+            "The T480 Windows SSH account must access Ubuntu through wsl.exe.",
+        ],
+        "commands": ["describe-requirements", "preflight", "execute", "verify"],
+        "operations": [
+            {"id": name, "purpose": details["purpose"], "approval_required": False}
+            for name, details in OPERATIONS.items()
+        ],
+    }
 
 
 def parser() -> argparse.ArgumentParser:
@@ -210,4 +271,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except RuntimeError as error:
         print(json.dumps({"tool_id": TOOL_ID, "ok": False, "error": str(error)}, indent=2), file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(2) from error

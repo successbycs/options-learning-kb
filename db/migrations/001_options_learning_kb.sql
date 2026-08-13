@@ -1,8 +1,6 @@
 -- Options Learning KB application schema. Apply only through the reviewed
 -- cs-ai-lab-infra PostgreSQL + pgvector adapter on the T480.
 CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE SCHEMA IF NOT EXISTS options_learning_kb;
 SET search_path TO options_learning_kb, public;
 
@@ -14,6 +12,7 @@ CREATE TABLE IF NOT EXISTS sources (
     lesson_title TEXT NOT NULL,
     owner TEXT NOT NULL,
     permission_basis TEXT NOT NULL,
+    transcript_review_status TEXT NOT NULL CHECK (transcript_review_status IN ('DRAFT', 'APPROVED', 'DISABLED')),
     review_status TEXT NOT NULL CHECK (review_status IN ('DRAFT', 'APPROVED', 'DISABLED')),
     citation_policy TEXT NOT NULL DEFAULT 'Private learning/research only; do not redistribute.',
     transcript_markdown TEXT NOT NULL,
@@ -120,13 +119,16 @@ RETURNS TABLE (
     chunk_id UUID,
     source_id UUID,
     lesson_title TEXT,
+    source_sha256 CHAR(64),
+    document_sha256 CHAR(64),
+    chunk_sha256 CHAR(64),
     timestamp_label TEXT,
     timestamp_seconds INTEGER,
     passage TEXT,
     similarity DOUBLE PRECISION
 )
 LANGUAGE sql STABLE AS $$
-    SELECT c.id, s.id, s.lesson_title, c.timestamp_start_label,
+    SELECT c.id, s.id, s.lesson_title, s.source_sha256, d.document_sha256, c.chunk_sha256, c.timestamp_start_label,
            c.timestamp_start_seconds, c.passage,
            1 - (c.embedding <=> query_embedding) AS similarity
     FROM chunks c

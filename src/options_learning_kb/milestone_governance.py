@@ -1,14 +1,15 @@
 """Evidence-first milestone lifecycle for the private Options Learning KB."""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 import json
-from pathlib import Path
 import subprocess
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
-
 
 STATE_RELATIVE_PATH = Path("data/milestone-state.json")
 EVIDENCE_RELATIVE_PATH = Path("data/milestone-evidence")
@@ -20,7 +21,7 @@ class GovernanceError(RuntimeError):
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def timestamp() -> str:
@@ -65,7 +66,11 @@ def validate_registry(payload: dict[str, Any]) -> None:
             raise GovernanceError(f"{milestone_id} cannot be completed in static registry data.")
         required = ("title", "intent", "dependencies", "entry_conditions", "proof_contract")
         missing = [key for key in required if key not in milestone]
-        missing.extend(key for key in ("title", "intent", "entry_conditions", "proof_contract") if key in milestone and not milestone[key])
+        missing.extend(
+            key
+            for key in ("title", "intent", "entry_conditions", "proof_contract")
+            if key in milestone and not milestone[key]
+        )
         if missing:
             raise GovernanceError(f"{milestone_id} is missing: {', '.join(missing)}")
         if not isinstance(milestone["dependencies"], list) or not isinstance(milestone["entry_conditions"], list):
@@ -77,7 +82,9 @@ def validate_registry(payload: dict[str, Any]) -> None:
         missing_contract = [key for key in required_contract if not contract.get(key)]
         if missing_contract:
             raise GovernanceError(f"{milestone_id} proof contract is missing: {', '.join(missing_contract)}")
-        if not isinstance(contract["capture_command"], list) or not all(isinstance(item, str) and item for item in contract["capture_command"]):
+        if not isinstance(contract["capture_command"], list) or not all(
+            isinstance(item, str) and item for item in contract["capture_command"]
+        ):
             raise GovernanceError(f"{milestone_id} capture_command must be a non-empty fixed argv list.")
         if not isinstance(contract["required_markers"], list):
             raise GovernanceError(f"{milestone_id} required_markers must be a list.")
@@ -86,7 +93,9 @@ def validate_registry(payload: dict[str, Any]) -> None:
                 raise ValueError
         except (TypeError, ValueError) as error:
             raise GovernanceError(f"{milestone_id} freshness_hours must be positive.") from error
-    unknown = {dependency for milestone in milestones for dependency in milestone["dependencies"] if dependency not in seen}
+    unknown = {
+        dependency for milestone in milestones for dependency in milestone["dependencies"] if dependency not in seen
+    }
     if unknown:
         raise GovernanceError(f"Unknown milestone dependencies: {', '.join(sorted(unknown))}")
 
@@ -117,7 +126,11 @@ def _record(local: dict[str, Any], event: str, details: dict[str, Any] | None = 
 
 def _dependencies_missing(registry: dict[str, Any], state: dict[str, Any], milestone: dict[str, Any]) -> list[str]:
     definitions = milestones_by_id(registry)
-    return [dependency for dependency in milestone["dependencies"] if definitions[dependency] and state["milestones"].get(dependency, {}).get("status") != "complete"]
+    return [
+        dependency
+        for dependency in milestone["dependencies"]
+        if definitions[dependency] and state["milestones"].get(dependency, {}).get("status") != "complete"
+    ]
 
 
 def start_milestone(registry: dict[str, Any], state: dict[str, Any], milestone_id: str) -> None:
@@ -134,7 +147,9 @@ def start_milestone(registry: dict[str, Any], state: dict[str, Any], milestone_i
     _record(local, "started")
 
 
-def set_noncompletion(registry: dict[str, Any], state: dict[str, Any], milestone_id: str, status: str, reason: str) -> None:
+def set_noncompletion(
+    registry: dict[str, Any], state: dict[str, Any], milestone_id: str, status: str, reason: str
+) -> None:
     if status not in {"blocked", "needs_fix"} or not reason.strip():
         raise GovernanceError("A concrete blocked or needs_fix reason is required.")
     if milestone_id not in milestones_by_id(registry):
@@ -159,19 +174,29 @@ def capture_evidence(registry: dict[str, Any], state: dict[str, Any], milestone_
     except subprocess.TimeoutExpired as error:
         raise GovernanceError(f"{milestone_id} evidence capture timed out.") from error
     if completed.returncode != 0:
-        raise GovernanceError(f"{milestone_id} capture failed: {completed.stderr.strip() or 'exit ' + str(completed.returncode)}")
+        raise GovernanceError(
+            f"{milestone_id} capture failed: {completed.stderr.strip() or 'exit ' + str(completed.returncode)}"
+        )
     capture_id = f"{utc_now().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
     evidence_path = root / EVIDENCE_RELATIVE_PATH / milestone_id / f"{capture_id}.json"
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     evidence_path.write_text(completed.stdout, encoding="utf-8")
-    evidence = {"capture_id": capture_id, "path": str(evidence_path.relative_to(root)), "sha256": file_sha256(evidence_path),
-                "captured_at": timestamp(), "captured_by": "declared_registry_command", "command": command}
+    evidence = {
+        "capture_id": capture_id,
+        "path": str(evidence_path.relative_to(root)),
+        "sha256": file_sha256(evidence_path),
+        "captured_at": timestamp(),
+        "captured_by": "declared_registry_command",
+        "command": command,
+    }
     local["evidence"].append(evidence)
     _record(local, "evidence_captured", {"capture_id": capture_id, "path": evidence["path"]})
     return evidence
 
 
-def _load_verified_evidence(registry: dict[str, Any], state: dict[str, Any], milestone_id: str, root: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
+def _load_verified_evidence(
+    registry: dict[str, Any], state: dict[str, Any], milestone_id: str, root: Path
+) -> tuple[dict[str, Any], dict[str, Any], str]:
     milestone = milestones_by_id(registry).get(milestone_id)
     if not milestone:
         raise GovernanceError(f"Unknown milestone: {milestone_id}")
@@ -203,8 +228,13 @@ def _load_verified_evidence(registry: dict[str, Any], state: dict[str, Any], mil
     return milestone, evidence, content
 
 
-def verify_milestone(registry: dict[str, Any], state: dict[str, Any], milestone_id: str, root: Path,
-                     independent_verifiers: dict[str, Callable[[Path], dict[str, Any]]] | None = None) -> dict[str, Any]:
+def verify_milestone(
+    registry: dict[str, Any],
+    state: dict[str, Any],
+    milestone_id: str,
+    root: Path,
+    independent_verifiers: dict[str, Callable[[Path], dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
     milestone, evidence, _ = _load_verified_evidence(registry, state, milestone_id, root)
     verifier_name = str(milestone["proof_contract"]["verifier"])
     if verifier_name == "registry_self_check":
@@ -214,16 +244,26 @@ def verify_milestone(registry: dict[str, Any], state: dict[str, Any], milestone_
         readback = independent_verifiers[verifier_name](root)
     else:
         raise GovernanceError(f"Verifier is not implemented: {verifier_name}")
-    result = {"milestone_id": milestone_id, "verified_at": timestamp(), "primary_evidence": evidence["path"],
-              "verifier": verifier_name, "independent_readback": readback}
+    result = {
+        "milestone_id": milestone_id,
+        "verified_at": timestamp(),
+        "primary_evidence": evidence["path"],
+        "verifier": verifier_name,
+        "independent_readback": readback,
+    }
     local = _local_state(state, milestone_id)
     local["last_verification"] = result
     _record(local, "verified", result)
     return result
 
 
-def complete_milestone(registry: dict[str, Any], state: dict[str, Any], milestone_id: str, root: Path,
-                       independent_verifiers: dict[str, Callable[[Path], dict[str, Any]]] | None = None) -> dict[str, Any]:
+def complete_milestone(
+    registry: dict[str, Any],
+    state: dict[str, Any],
+    milestone_id: str,
+    root: Path,
+    independent_verifiers: dict[str, Callable[[Path], dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
     result = verify_milestone(registry, state, milestone_id, root, independent_verifiers)
     local = _local_state(state, milestone_id)
     local["status"] = "complete"
@@ -236,6 +276,13 @@ def status_report(registry: dict[str, Any], state: dict[str, Any]) -> dict[str, 
     result: list[dict[str, Any]] = []
     for milestone_id, milestone in milestones_by_id(registry).items():
         local = state["milestones"].get(milestone_id, {})
-        result.append({"id": milestone_id, "title": milestone["title"], "status": local.get("status", "not_started"),
-                       "blocked_by": _dependencies_missing(registry, state, milestone), "evidence_count": len(local.get("evidence", []))})
+        result.append(
+            {
+                "id": milestone_id,
+                "title": milestone["title"],
+                "status": local.get("status", "not_started"),
+                "blocked_by": _dependencies_missing(registry, state, milestone),
+                "evidence_count": len(local.get("evidence", [])),
+            }
+        )
     return {"milestones": result}

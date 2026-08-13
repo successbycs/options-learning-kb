@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
-import re
-from typing import Mapping
 
+import yaml
 
 TIMESTAMP = re.compile(r"^\[(?P<label>\d{2}:\d{2}:\d{2})\]\s*(?P<text>.*)$")
 FRONT_MATTER = re.compile(r"\A---\s*\n(?P<body>.*?)\n---\s*\n?", re.DOTALL)
@@ -64,14 +65,13 @@ def _metadata(markdown: str) -> tuple[dict[str, str], str]:
     match = FRONT_MATTER.match(markdown)
     if not match:
         raise TranscriptContractError("A reviewed transcript needs YAML-style front matter.")
-    values: dict[str, str] = {}
-    for line in match.group("body").splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if ":" not in line:
-            raise TranscriptContractError(f"Invalid front-matter line: {line!r}")
-        key, value = line.split(":", 1)
-        values[key.strip().lower()] = value.strip().strip("\"'")
+    try:
+        parsed = yaml.safe_load(match.group("body")) or {}
+    except yaml.YAMLError as error:
+        raise TranscriptContractError("Transcript front matter is not valid YAML.") from error
+    if not isinstance(parsed, dict):
+        raise TranscriptContractError("Transcript front matter must be a mapping.")
+    values = {str(key).strip().lower(): str(value).strip() for key, value in parsed.items() if value is not None}
     missing = [field for field in REQUIRED_FIELDS if not values.get(field)]
     if missing:
         raise TranscriptContractError(f"Missing reviewed-transcript metadata: {', '.join(missing)}")
@@ -80,7 +80,7 @@ def _metadata(markdown: str) -> tuple[dict[str, str], str]:
             raise TranscriptContractError(f"{field} must be a 64-character SHA-256 hex digest.")
     if values["review_status"].upper() not in {"DRAFT", "APPROVED", "DISABLED"}:
         raise TranscriptContractError("review_status must be DRAFT, APPROVED, or DISABLED.")
-    return values, markdown[match.end():]
+    return values, markdown[match.end() :]
 
 
 def _seconds(label: str) -> int:
@@ -111,13 +111,18 @@ def parse_reviewed_transcript(markdown: str) -> Transcript:
         raise TranscriptContractError("transcript_sha256 does not match the uploaded Markdown artifact.")
 
     segments: list[TimestampedSegment] = []
+    prior_seconds = -1
     for raw_line in body.splitlines():
         match = TIMESTAMP.match(raw_line.strip())
         if not match:
             continue
         text = match.group("text").strip()
         if text:
-            segments.append(TimestampedSegment(_seconds(match.group("label")), match.group("label"), text))
+            seconds = _seconds(match.group("label"))
+            if seconds < prior_seconds:
+                raise TranscriptContractError("Transcript timestamps must be in non-decreasing order.")
+            segments.append(TimestampedSegment(seconds, match.group("label"), text))
+            prior_seconds = seconds
     if not segments:
         raise TranscriptContractError("Transcript must contain timestamped [HH:MM:SS] passages.")
     return Transcript(markdown=markdown, metadata=metadata, segments=tuple(segments))
@@ -144,14 +149,16 @@ def build_chunks(transcript: Transcript, maximum_characters: int = 1200) -> list
     for ordinal, group in enumerate(groups):
         passage = "\n".join(f"[{segment.label}] {segment.text}" for segment in group)
         start, end = group[0], group[-1]
-        digest_payload = f"{transcript.transcript_sha256}:{ordinal}:{passage}".encode("utf-8")
-        drafts.append(ChunkDraft(
-            ordinal=ordinal,
-            timestamp_start_seconds=start.seconds,
-            timestamp_start_label=start.label,
-            timestamp_end_seconds=end.seconds,
-            timestamp_end_label=end.label,
-            passage=passage,
-            chunk_sha256=sha256(digest_payload).hexdigest(),
-        ))
+        digest_payload = f"{transcript.transcript_sha256}:{ordinal}:{passage}".encode()
+        drafts.append(
+            ChunkDraft(
+                ordinal=ordinal,
+                timestamp_start_seconds=start.seconds,
+                timestamp_start_label=start.label,
+                timestamp_end_seconds=end.seconds,
+                timestamp_end_label=end.label,
+                passage=passage,
+                chunk_sha256=sha256(digest_payload).hexdigest(),
+            )
+        )
     return drafts

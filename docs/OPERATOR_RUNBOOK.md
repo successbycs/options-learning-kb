@@ -67,7 +67,7 @@ python3 scripts/t480_adapter.py execute --operation ollama_bge_status
    docker compose ps
    ```
 
-6. Use `http://127.0.0.1:8502` on the T480 to register a real reviewed transcript, approve it, ingest it, and run the QA pack. Re-running ingest with the same source/transcript/model idempotency key returns the existing run without duplicate chunks.
+6. Use `http://127.0.0.1:8502` on the T480 to register a real reviewed transcript, approve it, ingest it, and run the QA pack. Uploading always creates a `DRAFT` source: operator approval is only allowed when the uploaded front matter is also `APPROVED`. Re-running ingest with the same source/transcript/model idempotency key returns the existing run without duplicate chunks.
 
 ## Database readback proof
 
