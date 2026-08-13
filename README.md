@@ -25,6 +25,10 @@ The application has a loopback-only Streamlit operator UI and an internal-only, 
 
 The repository now includes its own read-only [T480 adapter](t480/README.md), ported from the shared lab. It can inspect Windows/WSL/Docker health, shared service/network state, pgvector, and local `bge-m3` availability without exposing a general remote shell.
 
+## Delivery governance
+
+The KB’s [evidence-first milestone controller](docs/MILESTONE_GOVERNANCE.md) prevents a milestone from closing on assertions alone. It retains raw private proof outside Git, checks its hash and freshness, and requires an independent read-back for real T480 dependency proof. The active delivery sequence is controller → shared T480 dependencies → deployment/schema → approved private ingest → retrieval QA/gap → read-only Options Decision Agent integration.
+
 ## Schema
 
 The migration creates source, document, timestamped chunk, ingest run, retrieval QA/question-run, and unsupported-question-gap records. Source, transcript/document, and chunk SHA-256 values make changes observable; the source/transcript/model key makes ingest idempotent. The retrieval SQL function filters to `APPROVED` sources and supports an optional source UUID scope.

@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "milestones": [
+    {
+      "id": "KB-M0",
+      "title": "Evidence-first delivery controller operational",
+      "status": "not_started",
+      "intent": "Prove that the KB cannot be completed from a static registry or an unverified claim.",
+      "dependencies": [],
+      "entry_conditions": ["The repository contains the KB registry and controller."],
+      "proof_contract": {
+        "real_surface": "The executable KB controller validating the tracked registry.",
+        "capture_command": ["python3", "scripts/kb_milestone_probe.py", "controller"],
+        "required_markers": ["KB_MILESTONE_CONTROLLER_VALID"],
+        "freshness_hours": 24,
+        "verifier": "registry_self_check"
+      }
+    },
+    {
+      "id": "KB-M1",
+      "title": "Shared T480 retrieval dependencies proven",
+      "status": "not_started",
+      "intent": "Prove that the private shared PostgreSQL/pgvector, Docker network, and local bge-m3 runtime are reachable through governed read-only operations.",
+      "dependencies": ["KB-M0"],
+      "entry_conditions": ["KB-M0 is complete.", "T480 key-authenticated control path is configured."],
+      "proof_contract": {
+        "real_surface": "The existing T480 shared lab services, checked through the fixed KB adapter.",
+        "capture_command": ["python3", "scripts/kb_milestone_probe.py", "t480-dependencies"],
+        "required_markers": ["KB_T480_RETRIEVAL_DEPENDENCIES_READY", "bge-m3-ready", "cs-ai-lab_internal"],
+        "freshness_hours": 24,
+        "verifier": "t480_retrieval_dependencies_readback"
+      }
+    },
+    {
+      "id": "KB-M2",
+      "title": "KB deployment and schema proven",
+      "status": "not_started",
+      "intent": "Deploy only application containers onto the existing T480 network and apply the reviewed schema through the shared governed PostgreSQL adapter.",
+      "dependencies": ["KB-M1"],
+      "entry_conditions": ["KB-M1 is complete.", "Explicit approval exists for the shared database migration and application deployment."],
+      "proof_contract": {
+        "real_surface": "T480 deployed operator UI/API, options_learning_kb schema, and application container health.",
+        "capture_command": ["python3", "scripts/kb_milestone_probe.py", "deployment"],
+        "required_markers": ["KB_DEPLOYMENT_READBACK"],
+        "freshness_hours": 24,
+        "verifier": "kb_deployment_readback"
+      }
+    },
+    {
+      "id": "KB-M3",
+      "title": "Private approved transcript retrieval proven",
+      "status": "not_started",
+      "intent": "Ingest one real approved private transcript and independently read back source, document, chunks, ingest run, and expected cited retrieval.",
+      "dependencies": ["KB-M2"],
+      "entry_conditions": ["KB-M2 is complete.", "A real reviewed transcript and permission basis are available privately."],
+      "proof_contract": {
+        "real_surface": "Private KB database and read-only retrieval API.",
+        "capture_command": ["python3", "scripts/kb_milestone_probe.py", "private-ingest"],
+        "required_markers": ["KB_PRIVATE_INGEST_READBACK"],
+        "freshness_hours": 24,
+        "verifier": "private_ingest_readback"
+      }
+    },
+    {
+      "id": "KB-M4",
+      "title": "Retrieval QA and gap handling proven",
+      "status": "not_started",
+      "intent": "Prove a small QA pack retrieves expected timestamped passages and an unsupported question creates a visible gap without an invented answer.",
+      "dependencies": ["KB-M3"],
+      "entry_conditions": ["KB-M3 is complete.", "Private QA questions and expected timestamps are available."],
+      "proof_contract": {
+        "real_surface": "Private Test Lab records and retrieval API results.",
+        "capture_command": ["python3", "scripts/kb_milestone_probe.py", "retrieval-qa"],
+        "required_markers": ["KB_RETRIEVAL_QA_READBACK"],
+        "freshness_hours": 24,
+        "verifier": "retrieval_qa_readback"
+      }
+    },
+    {
+      "id": "KB-M5",
+      "title": "Options Decision Agent read-only integration proven",
+      "status": "not_started",
+      "intent": "Prove a versioned read-only retrieval contract supplies cited learning context without changing deterministic policy or execution state.",
+      "dependencies": ["KB-M4"],
+      "entry_conditions": ["KB-M4 is complete.", "A mutually tested API contract is committed in both repositories."],
+      "proof_contract": {
+        "real_surface": "Deployed KB API and Options Decision Agent integration runtime.",
+        "capture_command": ["python3", "scripts/kb_milestone_probe.py", "decision-agent-contract"],
+        "required_markers": ["KB_DECISION_AGENT_READBACK"],
+        "freshness_hours": 24,
+        "verifier": "decision_agent_contract_readback"
+      }
+    }
+  ]
+}

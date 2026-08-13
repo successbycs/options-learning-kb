@@ -9,3 +9,13 @@ def test_migration_has_required_private_retrieval_controls():
                      "CREATE TABLE IF NOT EXISTS retrieval_qa_questions", "CREATE TABLE IF NOT EXISTS knowledge_gaps",
                      "VECTOR(1024)", "match_approved_chunks", "s.review_status = 'APPROVED'", "d.is_current = true"):
         assert required in sql
+
+
+def test_delivery_registry_requires_real_surface_proof_contracts():
+    import json
+    from options_learning_kb.milestone_governance import validate_registry
+
+    registry = json.loads(Path("milestones/registry.json").read_text())
+    validate_registry(registry)
+    assert registry["milestones"][0]["id"] == "KB-M0"
+    assert registry["milestones"][1]["proof_contract"]["verifier"] == "t480_retrieval_dependencies_readback"
