@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.streamlit/secrets.toml
+data/
+private_transcripts/
+*.sqlite3
+coverage.xml
+htmlcov/
+
+# T480/runtime evidence and application logs
+evidence/
+*.local.jsonl
+.env.t480.local

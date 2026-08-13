@@ -1,0 +1,16 @@
+{
+  "schema_version": "options-learning-kb.t480.operations.v1",
+  "scope": "fixed_read_only_operations_only",
+  "operations": [
+    {"id": "health", "purpose": "Inspect non-secret T480 Windows host health."},
+    {"id": "storage", "purpose": "Inspect Windows filesystem capacity."},
+    {"id": "wsl_status", "purpose": "Inspect WSL status and distributions."},
+    {"id": "docker_status", "purpose": "Inspect Docker Engine and Compose availability."},
+    {"id": "docker_runtime_evidence", "purpose": "Inspect WSL Docker runtime health and capacity."},
+    {"id": "shared_lab_status", "purpose": "Inspect shared cs-ai-lab Compose and network status."},
+    {"id": "pgvector_status", "purpose": "Inspect private PostgreSQL/pgvector availability."},
+    {"id": "ollama_bge_status", "purpose": "Inspect private Ollama and local bge-m3 availability."},
+    {"id": "options_kb_preflight", "purpose": "Inspect whether the KB can consume shared T480 services."},
+    {"id": "options_kb_runtime_status", "purpose": "Inspect deployed KB container state."}
+  ]
+}
